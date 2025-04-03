@@ -3,6 +3,7 @@
 
 #include "dbg.h"
 #include "fixedptc.h"
+#include <linux/types.h>
 
 // fixedpt doesn't have a tanh function, so i made one
 static inline fixedpt fixedpt_tanh(fixedpt x) {
@@ -37,31 +38,56 @@ static inline fixedpt sigmoid_profile(fixedpt input_speed) {
   return fixedpt_div(FIXEDPT_ONE, fixedpt_add(FIXEDPT_ONE, exp_input_speed));
 }
 
+// Validation helper functions
+static inline int is_valid_motivity(fixedpt motivity) {
+  return motivity > FIXEDPT_ONE;
+}
+
+static inline int is_valid_syncspeed(fixedpt syncspeed) {
+  return syncspeed > FIXEDPT_ZERO;
+}
+
+static inline int is_valid_input_speed(fixedpt input_speed) {
+  return input_speed >= FIXEDPT_ZERO;
+}
+
+static inline fixedpt safe_log(fixedpt x, fixedpt base) {
+  if (x <= FIXEDPT_ZERO || base <= FIXEDPT_ZERO) {
+    return FIXEDPT_ONE; // Return 1 as a safe default
+  }
+  return fixedpt_log(x, base);
+}
+
+static inline fixedpt safe_div(fixedpt numerator, fixedpt denominator) {
+  if (denominator == FIXEDPT_ZERO) {
+    return FIXEDPT_ONE; // Return 1 as a safe default
+  }
+  return fixedpt_div(numerator, denominator);
+}
+
 static inline fixedpt raw_accel_motivity(fixedpt input_speed, fixedpt motivity, fixedpt gamma, fixedpt syncspeed) {
+  // Validate inputs
+  if (!is_valid_motivity(motivity) || !is_valid_syncspeed(syncspeed) || !is_valid_input_speed(input_speed)) {
+    return FIXEDPT_ONE;
+  }
   
-  fixedpt log_motivity = fixedpt_log(motivity,fixedpt_rconst(10)); // use args.motivity
-  fixedpt gamma_const = fixedpt_div(gamma, log_motivity); // use args.gamma aka growth rate
-  fixedpt log_syncspeed = fixedpt_log(syncspeed,fixedpt_rconst(10)); // use args.sync_speed aka midpoint
-  
+  fixedpt log_motivity = safe_log(motivity, fixedpt_rconst(10));
+  fixedpt gamma_const = safe_div(gamma, log_motivity);
+  fixedpt log_syncspeed = safe_log(syncspeed, fixedpt_rconst(10));
   
   if (input_speed == syncspeed) {
     return FIXEDPT_ONE;
   }
   
-  fixedpt sharpness =  FIXEDPT_ONE; // FIXEDPT_ONE // or fixedpt_rconst(0.94)
-  fixedpt sharpness_recip = fixedpt_div(FIXEDPT_ONE, sharpness);
-  // fixedpt use_linear_clamp(sharpness >= 16);
+  fixedpt sharpness = FIXEDPT_ONE;
+  fixedpt sharpness_recip = safe_div(FIXEDPT_ONE, sharpness);
   
-  fixedpt minimum_sens = fixedpt_div(FIXEDPT_ONE, fixedpt_rconst(2.1));
-  fixedpt maximum_sens = fixedpt_rconst(2.1);
-
-  fixedpt log_x = fixedpt_log(input_speed,fixedpt_rconst(10));
+  fixedpt log_x = safe_log(input_speed, fixedpt_rconst(10));
   fixedpt log_diff = fixedpt_sub(log_x, log_syncspeed);
   
   if (log_diff > FIXEDPT_ZERO) {
-  
     fixedpt log_space = fixedpt_mul(gamma_const, log_diff);
-    fixedpt log_space_sharpened =  fixedpt_pow(log_space, sharpness);
+    fixedpt log_space_sharpened = fixedpt_pow(log_space, sharpness);
     fixedpt tanh_log_space_sharpened = fixedpt_tanh(log_space_sharpened);
 
     fixedpt exponent = fixedpt_pow(tanh_log_space_sharpened, sharpness_recip);
@@ -70,29 +96,22 @@ static inline fixedpt raw_accel_motivity(fixedpt input_speed, fixedpt motivity, 
     dbg("raw accel motivity input_speed: %s", fixedpt_cstr(input_speed, 6));
     dbg("raw accel motivity log_x: %s", fixedpt_cstr(log_x, 6));
     dbg("raw accel motivity log_diff: %s", fixedpt_cstr(log_diff, 6));
-
     dbg("raw accel motivity log_motivity: %s", fixedpt_cstr(log_motivity, 6));
     dbg("raw accel motivity gamma_const: %s", fixedpt_cstr(gamma_const, 6));
     dbg("raw accel motivity log_space: %s", fixedpt_cstr(log_space, 6));
-
     dbg("raw accel motivity log_space_sharpened: %s", fixedpt_cstr(log_space_sharpened, 6));
     dbg("raw accel motivity tanh_log_space_sharpened: %s", fixedpt_cstr(tanh_log_space_sharpened, 6));
     dbg("raw accel motivity sharpness_recip: %s", fixedpt_cstr(sharpness_recip, 6));
-
     dbg("raw accel motivity exponent: %s", fixedpt_cstr(exponent, 6));
     dbg("raw accel motivity result: %s", fixedpt_cstr(result, 6));
 
     return result;
-  } 
-
-  else {
-    fixedpt log_space = fixedpt_mul(fixedpt_mul(gamma_const, log_diff),fixedpt_rconst(-1));
-    fixedpt exponent = fixedpt_mul(fixedpt_pow(fixedpt_tanh(fixedpt_pow(log_space, sharpness)), sharpness_recip),fixedpt_rconst(-1));
+  } else {
+    fixedpt log_space = fixedpt_mul(fixedpt_mul(gamma_const, log_diff), fixedpt_rconst(-1));
+    fixedpt exponent = fixedpt_mul(fixedpt_pow(fixedpt_tanh(fixedpt_pow(log_space, sharpness)), sharpness_recip), fixedpt_rconst(-1));
     fixedpt result = fixedpt_exp(fixedpt_mul(exponent, log_motivity));
     return result;
-  } 
-
-  return FIXEDPT_ONE;
+  }
 }
 
 // Kinda motivity, didn't manage to test it yet
@@ -137,6 +156,13 @@ extern inline fixedpt sensitivity(fixedpt input_speed,
                                   fixedpt param_sync_speed,
                                   fixedpt param_offset,
                                   fixedpt param_output_cap) {
+  // Validate parameters
+  if (param_sens_mult <= FIXEDPT_ZERO || 
+      param_motivity <= FIXEDPT_ONE || 
+      param_sync_speed <= FIXEDPT_ZERO ||
+      param_gamma <= FIXEDPT_ZERO) {
+    return FIXEDPT_ONE;
+  }
 
   input_speed = fixedpt_sub(input_speed, param_offset);
 
@@ -147,24 +173,14 @@ extern inline fixedpt sensitivity(fixedpt input_speed,
 
   if (input_speed > FIXEDPT_ZERO) {
     // Chose the right accelearion profile based on the mode
-    // todo: is this check stable?
     if (param_mode == FIXEDPT_ZERO) {
       // Use linear acceleration
       sens = linear_profile(param_accel, input_speed);
     } else {
-      // Use motivity like function 1+ ((e-1)/(1+e^-(0.4*x-6))) (see: https://www.desmos.com/calculator  input: y=\frac{e-1}{1+e^{-\left(0.4x-6\right)}}+1)
+      // Use motivity like function
       dbg("motivity input speed    %s", fixedpt_cstr(input_speed, 6));
       sens = raw_accel_motivity(input_speed, param_motivity, param_gamma, param_sync_speed);
-      // dbg("motivity yeah");
     }
-
-    // todo: incoming profiles!
-
-    // Use a logarithmic profile
-    // sens = log_profile(input_speed);
-
-    // Or use a sigmoid profile instead
-    // sens = sigmoid_profile(input_speed);
   }
 
   sens = fixedpt_mul(sens, param_sens_mult);
@@ -181,17 +197,16 @@ extern inline fixedpt sensitivity(fixedpt input_speed,
   return sens;
 }
 
-static inline fixedpt input_speed(fixedpt dx, fixedpt dy,
-                                  u32 polling_interval) {
-  fixedpt distance =
-      fixedpt_sqrt(fixedpt_add(fixedpt_mul(dx, dx), fixedpt_mul(dy, dy)));
+static inline fixedpt input_speed(fixedpt dx, fixedpt dy, u32 polling_interval) {
+  if (polling_interval == 0) {
+    return FIXEDPT_ZERO;
+  }
 
+  fixedpt distance = fixedpt_sqrt(fixedpt_add(fixedpt_mul(dx, dx), fixedpt_mul(dy, dy)));
   dbg("distance (in)              %s", fixedpt_cstr(distance, 6));
 
-  fixedpt speed_in = fixedpt_div(distance, fixedpt_fromint(polling_interval));
-
-  dbg("polling interval           %s",
-      fixedpt_cstr(fixedpt_fromint(polling_interval), 6));
+  fixedpt speed_in = safe_div(distance, fixedpt_fromint(polling_interval));
+  dbg("polling interval           %s", fixedpt_cstr(fixedpt_fromint(polling_interval), 6));
   dbg("speed (in)                 %s", fixedpt_cstr(speed_in, 6));
 
   return speed_in;
