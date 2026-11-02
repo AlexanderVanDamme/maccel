@@ -1,6 +1,7 @@
 #ifndef _PARAM_H_
 #define _PARAM_H_
 
+#include "accel/lut.h"
 #include "accel/mode.h"
 #include "fixedptc.h"
 #include "linux/moduleparam.h"
@@ -78,6 +79,22 @@ PARAM(MOTIVITY, 98304, // 1.5 << 16
 PARAM(SYNC_SPEED, 327680, // 5 << 16
       "Set The middle sensitivity between you min and max sensitivity");
 #endif
+
+// For LUT Mode: the storage lives in accel/lut.h; userspace writes the tables
+// as comma separated fixed-point integers, e.g.
+//   echo 0,214748364800,429496729600 > /sys/module/maccel/parameters/LUT_X
+
+#if FIXEDPT_BITS == 64
+module_param_array_named(LUT_X, LUT_TABLE_X, long, &LUT_COUNT_X, RW_USER_GROUP);
+module_param_array_named(LUT_Y, LUT_TABLE_Y, long, &LUT_COUNT_Y, RW_USER_GROUP);
+#else
+module_param_array_named(LUT_X, LUT_TABLE_X, int, &LUT_COUNT_X, RW_USER_GROUP);
+module_param_array_named(LUT_Y, LUT_TABLE_Y, int, &LUT_COUNT_Y, RW_USER_GROUP);
+#endif
+MODULE_PARM_DESC(LUT_X, "Input speeds (counts/ms at 1000 DPI) of the look-up "
+                        "table points, increasing, as fixed-point integers.");
+MODULE_PARM_DESC(LUT_Y, "Sensitivity multipliers of the look-up table points, "
+                        "as fixed-point integers, one per LUT_X entry.");
 
 // Flags
 #define PARAM_FLAG(param, default_value, desc)                                 \

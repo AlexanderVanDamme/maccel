@@ -28,6 +28,9 @@ impl AllParamArgs {
             AccelMode::NoAccel => {
                 AccelParamsByMode::NoAccel(crate::params::NoAccelCurveParams { _ffi_guard: [] })
             }
+            AccelMode::Lut => {
+                AccelParamsByMode::Lut(crate::params::LutCurveParams { _ffi_guard: [] })
+            }
         };
 
         AccelParams {

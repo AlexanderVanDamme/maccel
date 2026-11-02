@@ -4,7 +4,7 @@ use maccel_core::{
     fixedptc::Fpt,
     persist::{ParamStore, SysFsStore},
     subcommads::*,
-    AccelMode, NoAccelParamArgs, Param, ALL_COMMON_PARAMS, ALL_LINEAR_PARAMS, ALL_NATURAL_PARAMS,
+    AccelMode, LutParamArgs, NoAccelParamArgs, Param, ALL_COMMON_PARAMS, ALL_LINEAR_PARAMS, ALL_NATURAL_PARAMS,
     ALL_SYNCHRONOUS_PARAMS,
 };
 use maccel_tui::run_tui;
@@ -78,6 +78,10 @@ fn main() -> anyhow::Result<()> {
                 SetParamByModesSubcommands::Synchronous(param_args) => {
                     param_store.set_all_synchronous(param_args)?
                 }
+                SetParamByModesSubcommands::Lut(LutParamArgs {}) => {
+                    eprintln!("NOTE: The look-up table itself is set through the LUT_X and LUT_Y parameters (see maccel_curve).");
+                    eprintln!();
+                }
                 SetParamByModesSubcommands::NoAccel(NoAccelParamArgs {}) => {
                     eprintln!(
                         "NOTE: There are no parameters specific here except for the common ones."
@@ -110,6 +114,11 @@ fn main() -> anyhow::Result<()> {
                 GetParamsByModesSubcommands::Synchronous => {
                     print_all_params(ALL_SYNCHRONOUS_PARAMS.iter(), oneline, quiet)?;
                 }
+                GetParamsByModesSubcommands::Lut => {
+                    eprintln!("NOTE: The look-up table itself lives in the LUT_X and LUT_Y parameters (see maccel_curve).");
+                    eprintln!();
+                    print_all_params(ALL_COMMON_PARAMS.iter(), oneline, quiet)?;
+                }
                 GetParamsByModesSubcommands::NoAccel => {
                     eprintln!(
                         "NOTE: There are no parameters specific here except for the common ones."
@@ -130,6 +139,11 @@ fn main() -> anyhow::Result<()> {
                     }
                     AccelMode::Synchronous => {
                         print_all_params(ALL_SYNCHRONOUS_PARAMS.iter(), false, false)?;
+                    }
+                    AccelMode::Lut => {
+                        eprintln!("NOTE: The look-up table itself lives in the LUT_X and LUT_Y parameters (see maccel_curve).");
+                        eprintln!();
+                        print_all_params(ALL_COMMON_PARAMS.iter(), false, false)?;
                     }
                     AccelMode::NoAccel => {
                         eprintln!(

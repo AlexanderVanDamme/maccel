@@ -40,6 +40,7 @@ static struct accel_args collect_args(void) {
     accel.args.linear.output_cap = atofp(PARAM_OUTPUT_CAP);
     break;
   }
+  case lut:
   case no_accel:
   default: {
   }

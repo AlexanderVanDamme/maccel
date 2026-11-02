@@ -189,6 +189,50 @@ no_accel_test(no_accel_yx_ratio, 0.5, 1.5);
 rotation_test(rotation_45_degrees, 1, 45);
 rotation_test(rotation_90_degrees, 1, 90);
 
+static int test_lut_acceleration(const char *filename, fpt param_sens_mult,
+                                 fpt param_yx_ratio) {
+  /* A coarse "flat 0.09 -> S curve -> flat 0.25" profile. */
+  const lut_elem_t xs[] = {fpt_rconst(0), fpt_rconst(50), fpt_rconst(100),
+                           fpt_rconst(120), fpt_rconst(400)};
+  const lut_elem_t ys[] = {fpt_rconst(0.09), fpt_rconst(0.09),
+                           fpt_rconst(0.17), fpt_rconst(0.25),
+                           fpt_rconst(0.25)};
+  const unsigned int n = sizeof(xs) / sizeof(xs[0]);
+
+  for (unsigned int i = 0; i < n; i++) {
+    LUT_TABLE_X[i] = xs[i];
+    LUT_TABLE_Y[i] = ys[i];
+  }
+  LUT_COUNT_X = n;
+  LUT_COUNT_Y = n;
+
+  struct accel_args args = {
+      .sens_mult = param_sens_mult,
+      .yx_ratio = param_yx_ratio,
+      .input_dpi = fpt_fromint(1000),
+      .tag = lut,
+      .args = (union __accel_args){.lut = (struct lut_curve_args){}},
+  };
+
+  int result = test_acceleration(filename, args);
+
+  LUT_COUNT_X = 0;
+  LUT_COUNT_Y = 0;
+  return result;
+}
+
+#define lut_test(name, sens_mult, yx_ratio)                                    \
+  TEST name(void) {                                                            \
+    ASSERT_EQ(0, test_lut_acceleration("Lut__SENS_MULT-" #sens_mult           \
+                                       "-YX_RATIO-" #yx_ratio ".snapshot",     \
+                                       fpt_rconst(sens_mult),                  \
+                                       fpt_rconst(yx_ratio)));                 \
+    PASS();                                                                    \
+  }
+
+lut_test(lut_s_curve, 1, 1);
+lut_test(lut_s_curve_yx_ratio, 1, 1.2);
+
 SUITE(acceleration) {
   RUN_TEST(linear_identity);
   RUN_TEST(linear_default);
@@ -205,6 +249,8 @@ SUITE(acceleration) {
   RUN_TEST(no_accel_yx_ratio);
   RUN_TEST(rotation_45_degrees);
   RUN_TEST(rotation_90_degrees);
+  RUN_TEST(lut_s_curve);
+  RUN_TEST(lut_s_curve_yx_ratio);
 }
 
 GREATEST_MAIN_DEFS();

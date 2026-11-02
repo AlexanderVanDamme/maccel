@@ -193,6 +193,7 @@ declare_params!(
         SyncSpeed,
     },
     NoAccel {},
+    Lut {},
 );
 
 impl AccelMode {
@@ -202,6 +203,7 @@ impl AccelMode {
             AccelMode::Natural => "Natural (w/ Gain)",
             AccelMode::Synchronous => "Synchronous",
             AccelMode::NoAccel => "No Acceleration",
+            AccelMode::Lut => "Look-up Table",
         }
     }
 }

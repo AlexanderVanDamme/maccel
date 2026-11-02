@@ -2,6 +2,7 @@
 #define _ACCEL_H_
 
 #include "accel/linear.h"
+#include "accel/lut.h"
 #include "accel/mode.h"
 #include "accel/natural.h"
 #include "accel/synchronous.h"
@@ -17,6 +18,7 @@ union __accel_args {
   struct linear_curve_args linear;
   struct synchronous_curve_args synchronous;
   struct no_accel_curve_args no_accel;
+  struct lut_curve_args lut;
 };
 
 struct accel_args {
@@ -56,6 +58,10 @@ static inline struct vector sensitivity(fpt input_speed,
   case no_accel:
     dbg("accel mode %d: no_accel", args.tag);
     sens = FIXEDPT_ONE;
+    break;
+  case lut:
+    dbg("accel mode %d: lut", args.tag);
+    sens = __lut_sens_fun(input_speed, args.args.lut);
     break;
   default:
     sens = FIXEDPT_ONE;
